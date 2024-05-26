@@ -1,2 +1,2 @@
 # nh-downloader
-A nhentai download server
+A nhentai downloadPage server
