@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"nh-downloader/internal/config"
 	"nh-downloader/internal/rpc/lrr_rpc"
+	"nh-downloader/internal/rpc/nh_rpc"
 	"strings"
 	"time"
 
@@ -35,9 +36,9 @@ type idemItemInfo struct {
 }
 
 type similarThumbItemInfo struct {
-	Item  *model.Item
-	LrrId string
-	Score float64
+	Item      *model.Item
+	SimilarId string
+	Score     float64
 }
 
 // Dump to dump items by simple search
@@ -98,7 +99,7 @@ func Dump(filters []string) error {
 	}
 	logs.Info("[service.Dump] ----------------------⬇ similar thumb items ⬇----------------------")
 	for itemId, itemInfo := range ctx.SimilarThumbItemInfoMap {
-		logs.Info("[service.Dump]【url】 https://nhentai.net/g/"+itemId, "【lrrId】", itemInfo.LrrId, "【title】", itemInfo.Item.Title.Main, "【score】", itemInfo.Score)
+		logs.Info("[service.Dump]【url】 https://nhentai.net/g/"+itemId, "【similarId】", itemInfo.SimilarId, "【title】", itemInfo.Item.Title.Main, "【score】", itemInfo.Score)
 	}
 	logs.Info("[service.Dump] -------------------------⬇ dumped items ⬇-------------------------")
 	for itemId, item := range ctx.DownloadedItemMap {
@@ -213,7 +214,7 @@ func loadImageFromUrl(url string) (image.Image, error) {
 	var err error
 
 	for i := 0; i < config.Retried(); i++ {
-		resp, err = http.Get(url)
+		resp, err = nh_rpc.Get(url)
 		if err == nil {
 			break
 		}
@@ -235,7 +236,7 @@ func loadImageFromUrl(url string) (image.Image, error) {
 // similarItemMap: similar thumbnail item in lrr and nh, key: nhId, val: lrrId
 func findSimilarThumbnail(ctx *dumpContext) error {
 	// prepare lrr thumb hash map
-	lrrThumbHashMap := make(map[string]*goimagehash.ImageHash)
+	ThumbHashMap := make(map[string]*goimagehash.ImageHash)
 	for _, item := range ctx.LrrItemMap {
 		bytes, err := lrr_rpc.GetThumbBytes(item.Id)
 		if err != nil {
@@ -250,7 +251,7 @@ func findSimilarThumbnail(ctx *dumpContext) error {
 			logs.Error("[service.checkSimilarThumbnail] perceptionHash failed:", err)
 			return err
 		}
-		lrrThumbHashMap[item.Id] = hash
+		ThumbHashMap[item.Id] = hash
 	}
 	// todo config
 	waterLine := 0.8
@@ -267,22 +268,24 @@ func findSimilarThumbnail(ctx *dumpContext) error {
 			continue
 		}
 		score := 0.0
-		lrrId := ""
-		for id, lrrHash := range lrrThumbHashMap {
-			similarity, err := calculateSimilarity(hash, lrrHash)
+		similarId := ""
+		for id, sHash := range ThumbHashMap {
+			similarity, err := calculateSimilarity(hash, sHash)
 			if err != nil {
 				continue
 			}
 
 			if similarity > score {
 				score = similarity
-				lrrId = id
+				similarId = id
 			}
 		}
 		if score >= waterLine {
 			nhIdsTobeDelFromCached = append(nhIdsTobeDelFromCached, itemId)
-			ctx.SimilarThumbItemInfoMap[itemId] = &similarThumbItemInfo{Item: item, LrrId: lrrId, Score: score}
+			ctx.SimilarThumbItemInfoMap[itemId] = &similarThumbItemInfo{Item: item, SimilarId: similarId, Score: score}
+			continue
 		}
+		ThumbHashMap[item.Id] = hash
 	}
 	for _, id := range nhIdsTobeDelFromCached {
 		delete(ctx.CachedItemMap, id)

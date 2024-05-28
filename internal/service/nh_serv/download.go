@@ -4,10 +4,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net/http"
 	"os"
 	"path"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -55,11 +55,6 @@ func downloadPage(ext, folder string, mediaId, page int) error {
 		return nil
 	}
 
-	// todo config
-	client := &http.Client{
-		Timeout: 20 * time.Second,
-	}
-
 	file, err := os.Create(saveFilePath)
 	if err != nil {
 		logs.Error("[nh_serv.downloadPage] create file failed: ", err)
@@ -68,14 +63,7 @@ func downloadPage(ext, folder string, mediaId, page int) error {
 	defer file.Close()
 
 	for i := 0; i < config.Retried(); i++ {
-		var resp *http.Response
-		request, er := http.NewRequest("GET", nh_rpc.PageUrl(mediaId, page, ext), nil)
-		if er != nil {
-			logs.Error("[nh_serv.downloadPage] new http request failed:", err)
-			return er
-		}
-
-		resp, er = client.Do(request)
+		resp, er := nh_rpc.Get(nh_rpc.PageUrl(mediaId, page, ext))
 		if er != nil {
 			err = er
 			logs.Warn("[nh_serv.downloadPage] request failed: ", err)
@@ -94,7 +82,7 @@ func downloadPage(ext, folder string, mediaId, page int) error {
 		_, er = io.Copy(file, resp.Body)
 		if er != nil {
 			err = er
-			logs.Warn("[nh_serv.downloadPage] file copy failed: ")
+			logs.Warn("[nh_serv.downloadPage] file copy failed:", err)
 			time.Sleep(500 * time.Millisecond)
 			continue
 		}
@@ -122,7 +110,7 @@ func DownloadByItemId(id string) error {
 func DownloadItem(item *model.Item) error {
 	var err error
 	// prepare folder
-	folder := path.Join(config.CachePath(), item.Title.Main)
+	folder := path.Join(config.CachePath(), strings.ReplaceAll(item.Title.Main, "/", ""))
 	if _, err = os.Stat(folder); os.IsNotExist(err) {
 		err = os.MkdirAll(folder, os.ModePerm)
 		if err != nil {
@@ -192,7 +180,7 @@ func DownloadItem(item *model.Item) error {
 	}
 
 	// zip file
-	err = utils.ZipFiles(folder, path.Join(config.DownloadPath(), item.Title.Main+".zip"))
+	err = utils.ZipFiles(folder, path.Join(config.DownloadPath(), strings.ReplaceAll(item.Title.Main+".zip", "/", "")))
 	if err != nil {
 		logs.Error("[nh_serv.DownloadItem] zip failed:", err)
 		return err

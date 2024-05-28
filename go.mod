@@ -5,7 +5,7 @@ go 1.21
 require (
 	github.com/bytedance/sonic v1.11.6
 	github.com/corona10/goimagehash v1.1.0
-	github.com/denissslyu/nhentai-go v0.0.0-20240526131554-8d280cdcbea8
+	github.com/denissslyu/nhentai-go v0.0.0-20240527153248-50910d976648
 	github.com/gin-gonic/gin v1.10.0
 	github.com/gojp/kana v0.1.0
 	github.com/sirupsen/logrus v1.9.3

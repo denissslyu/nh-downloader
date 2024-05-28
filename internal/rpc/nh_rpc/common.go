@@ -2,6 +2,8 @@ package nh_rpc
 
 import (
 	"net/http"
+	"net/url"
+	"nh-downloader/internal/config"
 	"nh-downloader/utils/logs"
 	"time"
 
@@ -9,17 +11,42 @@ import (
 )
 
 var client *nhentai.Client
+var transport *http.Transport
 
 // todo config
 func Init() {
-	client = &nhentai.Client{}
+	client = nhentai.NewClient()
 
-	client.Transport = &http.Transport{
+	transport = &http.Transport{
 		TLSHandshakeTimeout:   time.Second * 20,
 		ExpectContinueTimeout: time.Second * 20,
 		ResponseHeaderTimeout: time.Second * 20,
 		IdleConnTimeout:       time.Second * 20,
 	}
+	client.Transport = transport
+
+	_ = SetProxy(config.Proxy())
+}
+
+func SetProxy(proxyUrl string) error {
+	logs.Info("[nh_rpc.SetProxy] setProxy:", proxyUrl)
+	if proxyUrl == "" {
+		transport.Proxy = nil
+		client.Transport = transport
+		return nil
+	}
+
+	proxy, err := url.Parse(proxyUrl)
+	if err != nil {
+		logs.Error("[nh_rpc.SetProxy] parse proxyUrl failed:", err)
+		return err
+	}
+
+	transport = &http.Transport{
+		Proxy: http.ProxyURL(proxy),
+	}
+	client.Transport = transport
+	return nil
 }
 
 func SimpleSearch(filters []string, page int) (*nhentai.ComicPageData, error) {
@@ -53,4 +80,8 @@ func PageUrl(mediaId, page int, t string) string {
 
 func Extension(t string) string {
 	return client.GetExtension(t)
+}
+
+func Get(url string) (*http.Response, error) {
+	return client.Get(url)
 }
